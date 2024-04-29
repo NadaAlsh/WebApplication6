@@ -24,8 +24,8 @@ namespace WebApplication6.Models
 
             public DbSet<BankBranch> BankBranches { get; set; }
             public DbSet<Employee> Employees { get; set; }
-          
-        }
+        public DbSet<UserAccount> Users { get; set; }
+    }
     }
 
 

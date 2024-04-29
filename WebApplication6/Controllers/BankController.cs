@@ -1,8 +1,19 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Data;
+using System.Linq;
 using WebApplication6.Models;
 
 namespace WebApplication6.Controllers
 {
+
+    [Authorize(Roles = "admin")]
+    public class AdminController : ControllerBase
+    {
+        // Admin only actions
+    }
+
+    [Authorize]
     [Route("api/bank")]
     [ApiController]
     public class BankController : ControllerBase
@@ -14,14 +25,22 @@ namespace WebApplication6.Controllers
             _context = context;
         }
 
-
+        [AllowAnonymous]
         [HttpGet]
-        public List<BankBranch> GetAll()
+        public ActionResult<PageListResult<BankBranch>> GetAll([FromQuery] BankFilter filter, int pageNumber = 1, int pageSize = 10)
         {
-            return _context.BankBranches.ToList();
+            var banks = _context.BankBranches.AsQueryable();
+
+            if (!string.IsNullOrEmpty(filter.SearchTerm))
+            {
+                banks = banks.Where(b => b.LocationName.Contains(filter.SearchTerm));
+            }
+
+            var pagedBanks = banks.ToPageList(pageNumber, pageSize);
+
+            return Ok(pagedBanks);
         }
-
-
+        [AllowAnonymous]
         [HttpGet("{id}")]
         public ActionResult<BankBranch> GetBankBranch(int id)
         {
@@ -32,14 +51,13 @@ namespace WebApplication6.Controllers
                 return NotFound();
             }
 
-
             bankBranch.Employees = _context.Employees.Where(e => e.BankBranchId == id).ToList();
 
             return bankBranch;
         }
 
-
         [HttpPost]
+        [Authorize]
         public IActionResult Add(AddBankRequest req)
         {
             _context.BankBranches.Add(new BankBranch()
@@ -52,5 +70,45 @@ namespace WebApplication6.Controllers
 
             return Created();
         }
+        [HttpPost("delete")]
+        [Authorize(Roles = "admin")]
+        public IActionResult Delete()
+        {
+            return Ok();
+        }
+
+
+}
+
+    public class BankFilter
+    {
+        public string? SearchTerm { get; set; }
+    }
+
+    public static class PagingExtensions
+    {
+        public static PageListResult<T> ToPageList<T>(this IQueryable<T> query, int pageNumber = 1, int pageSize = 50)
+        {
+            int totalRecords = query.Count();
+            var pagedData = query.Skip((pageNumber - 1) * pageSize)
+                                .Take(pageSize)
+                                .ToList();
+
+            return new PageListResult<T>
+            {
+                Data = pagedData,
+                CurrentPage = pageNumber,
+                TotalPages = (int)Math.Ceiling((double)totalRecords / pageSize),
+                TotalRecords = totalRecords
+            };
+        }
+    }
+
+    public class PageListResult<T>
+    {
+        public List<T> Data { get; set; }
+        public int CurrentPage { get; set; }
+        public int TotalPages { get; set; }
+        public int TotalRecords { get; set; }
     }
 }
